@@ -335,6 +335,16 @@ void eid1_decrypt_buffer(u8 *eid1) {
     //Decrypt eid1.
     aes_setkey_dec(&aes_ctxt, indiv + INDIV_EID1_KEY_OFFSET, 0x100);
     aes_crypt_cbc(&aes_ctxt, AES_DECRYPT, 0x290, indiv + INDIV_EID1_IV_OFFSET, eid1, eid1);
+	
+    aes_omac1(digest, eid1, 0x280, eid1_master_key, 0x80);
+
+    if (memcmp(digest, eid1 + 0x280, AES_OMAC1_DIGEST_SIZE) != 0){
+        printf("warning: eid1 second hash check failed!\n");
+	}
+	
+    //Decrypt eid1.
+    aes_setkey_dec(&aes_ctxt, eid1_master_key, 0x80);
+    aes_crypt_cbc(&aes_ctxt, AES_DECRYPT, 0x280, zero_iv, eid1, eid1);
 }
 
 void eid1_decrypt(s8 *file_in, s8 *file_out) {
@@ -343,8 +353,8 @@ void eid1_decrypt(s8 *file_in, s8 *file_out) {
 
     if (eid1 != NULL) {
         eid1_decrypt_buffer(eid1);
-        _write_buffer(file_out, eid1, 0x290);
-        free(eid1);
+		_write_buffer(file_out, eid1, 0x280);
+		free(eid1);
     }
 }
 
