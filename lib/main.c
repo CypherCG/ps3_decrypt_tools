@@ -80,12 +80,24 @@ void encrypt_eid0_section_A() {
     eid0_encrypt_section_A((s8*) "eid/eid0decrypted.section_A", (s8*) "eid/eid0encrypted.section_A");
 }
 
+void hexDump(const void *data, size_t size) {
+  size_t i;
+  for (i = 0; i < size; i++) {
+    printf("%02hhX%c", ((char *)data)[i], (i + 1) % 16 ? ' ' : '\n');
+  }
+  printf("\n");
+}
+
 void syscon_auth() {
-    aes_context aes_ctxt;
+    
     u8 indiv[0x40];
     u8 indiv_key[0x20];
-    u8 zero_iv[0x10] = {0};
+    //u8 zero_iv[0x10] = {0};
     u8 enc_key_seed[INDIV_SIZE];
+	u8 *eid1_dec;
+	u8 session_key[0x10];
+	u8 enc_eid1[INDIV_SIZE];
+	u8 another_enc_eid1[INDIV_SIZE];
 
     //fetching root_key
     eid_root_key = _read_buffer((s8*) "data/eid_root_key", NULL);
@@ -95,10 +107,52 @@ void syscon_auth() {
     _write_buffer((s8*) "syscon/indiv", indiv, 0x40);
 
     //Generate seeds
-    memcpy(indiv_key, indiv + 0x20, 0x20);
-    aes_setkey_enc(&aes_ctxt, indiv_key, KEY_BITS(0x20));
-    aes_crypt_cbc(&aes_ctxt, AES_ENCRYPT, INDIV_SIZE, zero_iv, syscon_key_seed, enc_key_seed);
+    //memcpy(indiv_key, indiv + 0x20, 0x20);
+    //aes_setkey_enc(&aes_ctxt, indiv_key, KEY_BITS(0x20));
+    //aes_crypt_cbc(&aes_ctxt, AES_ENCRYPT, INDIV_SIZE, zero_iv, syscon_key_seed, enc_key_seed);
+    //_write_buffer((s8*) "syscon/enc_key_seed", enc_key_seed, INDIV_SIZE);
+	
+	memcpy(indiv_key, indiv + 0x20, 0x20);
+    
+	for(int i=0;i<0x100;i=i+0x10){
+		aes_context aes_ctxt;
+		aes_setkey_enc(&aes_ctxt, indiv_key, KEY_BITS(0x20));
+		aes_crypt_ecb(&aes_ctxt, AES_ENCRYPT, syscon_key_seed+i, enc_key_seed+i);
+	}
     _write_buffer((s8*) "syscon/enc_key_seed", enc_key_seed, INDIV_SIZE);
+	
+	eid1_dec = _read_buffer((s8*) "eid/eid1decrypted.bin", NULL);
+	
+	
+	for(int j=0;j<0x100;j=j+0x10){
+		//AUTH1
+		if(j%0x20==0){
+			memcpy(session_key,session_key_create_key + (j / 0x20) * 0x10,0x10);
+			aes_context aes_ctxt;
+			aes_setkey_enc(&aes_ctxt, session_key, KEY_BITS(0x10));
+			aes_crypt_ecb(&aes_ctxt, AES_ENCRYPT, eid1_dec+0x10+(j / 0x20) * 0x10, enc_eid1 + j);
+			if(memcmp(enc_eid1+j,enc_key_seed+j,0x10)!=0){
+				printf("warning! auth1 eid1 even offset %d mismatch!\n", (j/0x20));
+			}
+		}
+	}
+	free(eid1_dec);
+	
+	eid1_dec = _read_buffer((s8*) "eid/eid1decrypted.bin", NULL);
+	
+	for(int k=0;k<0x80;k=k+0x10){
+		//AUTH2
+		memcpy(session_key,session_key_create_key + k,0x10);
+		aes_context aes_ctxt;
+		aes_setkey_enc(&aes_ctxt, session_key, KEY_BITS(0x10));
+		aes_crypt_ecb(&aes_ctxt, AES_ENCRYPT, eid1_dec+0x90 + k, another_enc_eid1 + k);
+		if(memcmp(another_enc_eid1 + k,enc_key_seed+0x10 + (k * 2),0x10)!=0){
+			printf("warning! auth2 odd offset %d mismatch!\n", (k/0x10));
+			hexDump(another_enc_eid1 + k, 0x10);
+			hexDump(enc_key_seed+(k * 2) +0x10,0x10);
+		}
+	}
+	free(eid1_dec);
 }
 
 void gen_vtrm(){
