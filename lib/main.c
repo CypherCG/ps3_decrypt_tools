@@ -130,9 +130,12 @@ void syscon_auth() {
 			memcpy(session_key,session_key_create_key + (j / 0x20) * 0x10,0x10);
 			aes_context aes_ctxt;
 			aes_setkey_enc(&aes_ctxt, session_key, KEY_BITS(0x10));
-			aes_crypt_ecb(&aes_ctxt, AES_ENCRYPT, eid1_dec+0x10+(j / 0x20) * 0x10, enc_eid1 + j);
+			aes_crypt_ecb(&aes_ctxt, AES_ENCRYPT, eid1_dec + 0x10 + (j / 0x20) * 0x10, enc_eid1 + j);
 			if(memcmp(enc_eid1+j,enc_key_seed+j,0x10)!=0){
 				printf("warning! auth1 eid1 even offset %d mismatch!\n", (j/0x20));
+			}else{
+				hexDump(enc_eid1+j, 0x10);
+				hexDump(enc_key_seed+j,0x10);
 			}
 		}
 	}
@@ -146,10 +149,11 @@ void syscon_auth() {
 		aes_context aes_ctxt;
 		aes_setkey_enc(&aes_ctxt, session_key, KEY_BITS(0x10));
 		aes_crypt_ecb(&aes_ctxt, AES_ENCRYPT, eid1_dec+0x90 + k, another_enc_eid1 + k);
-		if(memcmp(another_enc_eid1 + k,enc_key_seed+0x10 + (k * 2),0x10)!=0){
+		if(memcmp(another_enc_eid1 + k,enc_key_seed + 0x10 + (k * 2),0x10)!=0){
 			printf("warning! auth2 odd offset %d mismatch!\n", (k/0x10));
+		}else{
 			hexDump(another_enc_eid1 + k, 0x10);
-			hexDump(enc_key_seed+(k * 2) +0x10,0x10);
+			hexDump(enc_key_seed+ (k * 2) + 0x10,0x10);
 		}
 	}
 	free(eid1_dec);
